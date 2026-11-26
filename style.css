@@ -80,3 +80,22 @@ svg.chart{width:100%;height:auto;display:block;direction:ltr}
 .unit{position:relative}
 .unit input{padding-inline-end:52px}
 .unit span{position:absolute;inset-inline-end:14px;top:50%;transform:translateY(-50%);color:var(--mut);font-size:13px}
+.mx{display:grid;gap:10px;margin-top:6px}
+.bar.cb>i{background:linear-gradient(90deg,#fbbf24,#f59e0b)}
+.bar.ft>i{background:linear-gradient(90deg,#fb7185,#f43f5e)}
+#fab{position:fixed;left:14px;bottom:84px;width:54px;height:54px;border-radius:50%;border:0;font-size:24px;background:linear-gradient(135deg,var(--ac),var(--ac2));box-shadow:0 8px 22px #0007;z-index:7;cursor:pointer}
+body.onb #fab{display:none}
+#chat{position:fixed;inset:0;z-index:20;background:var(--bg);display:none;flex-direction:column;max-width:560px;margin:0 auto}
+.chh{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line)}
+.chm{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
+.bub{max-width:85%;padding:10px 14px;border-radius:18px;font-size:15px;white-space:pre-wrap}
+.bub.u{align-self:flex-start;background:linear-gradient(90deg,var(--ac),var(--ac2));color:#04241c;border-end-start-radius:4px}
+.bub.a{align-self:flex-end;background:var(--card2);border-end-end-radius:4px}
+.bub.s{align-self:stretch;max-width:100%;background:#2dd4a714;border:1px solid #2dd4a733;font-size:14px}
+.bub.s a{color:var(--ac2);margin-inline-start:8px}
+.bub.e{align-self:stretch;max-width:100%;background:#f8717115;border:1px solid #f8717144;font-size:14px}
+.chf{display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line)}
+.chf input{flex:1}
+.bi{display:flex;align-items:center;justify-content:center;gap:6px;font-size:14px;padding:11px 6px}
+.bi svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+#fab svg{width:26px;height:26px;stroke:#04241c;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
