@@ -54,6 +54,7 @@ const IC = {
   bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>'
 };
+IC.chat='<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>';
 const svg = k => `<svg viewBox="0 0 24 24">${IC[k]}</svg>`;
 
 // ---------- profile + calorie math ----------
@@ -90,6 +91,7 @@ function targets() {
   const c = calc(S.profile, curWeight());
   if (S.profile.ovK) c.kcal = S.profile.ovK;
   if (S.profile.ovP) c.protein = S.profile.ovP;
+  if (S.profile.ovK || S.profile.ovP) c.carbs = Math.max(0, Math.round((c.kcal - c.protein * 4 - c.fat * 9) / 4));
   return c;
 }
 function explain(p, w) {
@@ -161,9 +163,9 @@ function grabOb() {
 // ---------- presets ----------
 const MEALT = ['فطار', 'غداء', 'عشا', 'سناك'];
 const FOODS = [
-  ['رز مطبوخ (كوب)', 205, 4], ['صدر فراخ (150 جم)', 250, 46], ['بيضة', 70, 6], ['فول (طبق)', 220, 12], ['عدس (طبق)', 230, 16],
-  ['تونة (علبة)', 130, 28], ['لبن (كوب)', 150, 8], ['زبادي (علبة)', 100, 6], ['مكرونة (طبق)', 300, 10], ['عيش بلدي (رغيف)', 250, 8],
-  ['موزة', 105, 1], ['بطاطس (حبة)', 130, 3], ['فول سوداني (30 جم)', 170, 7], ['شوفان (50 جم)', 190, 7], ['كبدة (100 جم)', 175, 26]
+  ['رز مطبوخ (كوب)', 205, 4, 45, 0.5], ['صدر فراخ (150 جم)', 250, 46, 0, 6], ['بيضة', 70, 6, 0.6, 5], ['فول (طبق)', 220, 12, 30, 5], ['عدس (طبق)', 230, 16, 40, 1],
+  ['تونة (علبة)', 130, 28, 0, 2], ['لبن (كوب)', 150, 8, 12, 8], ['زبادي (علبة)', 100, 6, 8, 4], ['مكرونة (طبق)', 300, 10, 60, 2], ['عيش بلدي (رغيف)', 250, 8, 50, 1.5],
+  ['موزة', 105, 1, 27, 0.4], ['بطاطس (حبة)', 130, 3, 30, 0.2], ['فول سوداني (30 جم)', 170, 7, 5, 14], ['شوفان (50 جم)', 190, 7, 32, 3.5], ['كبدة (100 جم)', 175, 26, 4, 6]
 ];
 const EXG = {
   'صدر': ['بنش برس', 'بنش مائل دامبل', 'فلاي', 'ضغط (Push-up)', 'ديبس'],
@@ -175,7 +177,7 @@ const EXG = {
 let selG = 'صدر', selType = 'غداء';
 
 // ---------- today ----------
-let tab = 'today', day = today();
+let tab = 'today', day = today(), editId = null;
 function ring(frac, over) {
   const R = 70, C = 2 * Math.PI * R, f = Math.max(0, Math.min(1, frac));
   return `<svg viewBox="0 0 170 170"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2dd4a7"/><stop offset="1" stop-color="#38bdf8"/></linearGradient></defs>
@@ -185,7 +187,8 @@ function ring(frac, over) {
 function viewToday() {
   const T = targets();
   const meals = S.meals.filter(m => m.date === day);
-  const kcal = meals.reduce((a, m) => a + m.kcal, 0), prot = meals.reduce((a, m) => a + (m.p || 0), 0);
+  const kcal = meals.reduce((a, m) => a + m.kcal, 0), prot = meals.reduce((a, m) => a + (m.p || 0), 0), carb = meals.reduce((a, m) => a + (m.c || 0), 0), fat = meals.reduce((a, m) => a + (m.f || 0), 0);
+  const em = editId ? S.meals.find(m => m.id === editId) : null;
   const wk = S.workouts.filter(w => w.date === day);
   const names = [...new Set(S.workouts.map(w => w.exercise))];
   const left = Math.round(T.kcal - kcal);
@@ -195,17 +198,21 @@ function viewToday() {
 
   <div class="card hero"><h2>${svg('bolt')} ملخص اليوم</h2>
     <div class="ring">${ring(kcal / T.kcal, kcal > T.kcal)}<div class="c"><b>${ar(Math.round(kcal))}</b><span>من ${ar(T.kcal)} سعر</span><span>${left >= 0 ? 'باقي ' + ar(left) : 'زيادة ' + ar(-left)}</span></div></div>
-    <div class="row" style="margin-bottom:0;align-items:flex-end"><div><div class="mut">بروتين</div><b>${ar(r1(prot))}</b> <span class="mut">/ ${ar(T.protein)} جم</span><div class="bar pr"><i style="width:${Math.min(100, prot / T.protein * 100)}%"></i></div></div></div>
-    ${T.carbs ? `<div class="mut" style="margin-top:10px">الهدف: كارب ${ar(T.carbs)} جم · دهون ${ar(T.fat)} جم</div>` : ''}</div>
+    <div class="mx">${[['بروتين', prot, T.protein, 'pr'], ['كارب', carb, T.carbs, 'cb'], ['دهون', fat, T.fat, 'ft']].map(([n, v, t, c]) => `<div><div class="mut">${n}</div><b>${ar(r1(v))}</b> <span class="mut">/ ${ar(t)} جم</span><div class="bar ${c}"><i style="width:${t ? Math.min(100, v / t * 100) : 0}%"></i></div></div>`).join('')}</div>
+    </div>
 
-  <div class="card"><h2>${svg('food')} أضف وجبة</h2>
-    <div class="chips">${MEALT.map(t => `<button data-mt="${t}" class="${t === selType ? 'on' : ''}">${t}</button>`).join('')}</div>
+  <div class="card"><h2>${svg('food')} ${em ? 'تعديل وجبة' : 'أضف وجبة'}</h2>
+    <div class="chips">${MEALT.map(t => `<button data-mt="${t}" class="${t === (em && em.type || selType) ? 'on' : ''}">${t}</button>`).join('')}</div>
     <div class="mut" style="margin-bottom:6px">اختار أكلة سريعة (قيم تقريبية) أو اكتب بنفسك:</div>
     <div class="chips">${FOODS.map((f, i) => `<button data-food="${i}">${f[0]}</button>`).join('')}</div>
-    <form id="mealForm"><div class="row"><input name="name" placeholder="اسم الوجبة" required></div>
-      <div class="row"><input name="kcal" inputmode="decimal" placeholder="سعرات" required><input name="p" inputmode="decimal" placeholder="بروتين جم"></div>
-      <button class="btn">أضف الوجبة</button></form>
-    ${meals.map(m => `<div class="item"><span>${m.type ? '<span class="mut">' + esc(m.type) + ' · </span>' : ''}${esc(m.name)}<br><span class="mut">${ar(Math.round(m.kcal))} سعر · ${ar(r1(m.p || 0))} جم بروتين</span></span><button class="btn del" data-delmeal="${m.id}">حذف</button></div>`).join('')}
+    <div class="row"><button class="btn sec bi" id="scanBtn" type="button">${svg('photos')} صوّر الوجبة</button><button class="btn sec bi" id="chatBtn2" type="button">${svg('chat')} اسأل المساعد</button></div>
+    <input type="file" id="scanFile" accept="image/*" hidden>
+    <div id="scanNote"></div>
+    <form id="mealForm"><div class="row"><input name="name" placeholder="اسم الوجبة" required value="${em ? esc(em.name) : ''}"></div>
+      <div class="row"><input name="kcal" inputmode="decimal" placeholder="سعرات" required value="${em ? em.kcal : ''}"><input name="p" inputmode="decimal" placeholder="بروتين جم" value="${em && em.p ? em.p : ''}"></div>
+      <div class="row"><input name="c" inputmode="decimal" placeholder="كارب جم" value="${em && em.c ? em.c : ''}"><input name="f" inputmode="decimal" placeholder="دهون جم" value="${em && em.f ? em.f : ''}"></div>
+      <button class="btn">${em ? 'احفظ التعديل' : 'أضف الوجبة'}</button>${em ? '<button class="btn sec" type="button" id="cancelEdit">إلغاء</button>' : ''}</form>
+    ${meals.map(m => `<div class="item"><span>${m.type ? '<span class="mut">' + esc(m.type) + ' · </span>' : ''}${esc(m.name)}<br><span class="mut">${ar(Math.round(m.kcal))} سعر · ب ${ar(r1(m.p || 0))} · ك ${ar(r1(m.c || 0))} · د ${ar(r1(m.f || 0))} جم</span></span><span style="display:flex;gap:6px"><button class="btn del" style="color:var(--ac2);border-color:#38bdf844" data-editmeal="${m.id}">تعديل</button><button class="btn del" data-delmeal="${m.id}">حذف</button></span></div>`).join('')}
   </div>
 
   <div class="card"><h2>${svg('dumb')} تمرين النهاردة</h2>
@@ -228,14 +235,21 @@ function bindToday() {
   $('#prev').onclick = () => { day = addDays(day, -1); render(); };
   $('#next').onclick = () => { day = addDays(day, 1); render(); };
   document.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => { selType = b.dataset.mt; document.querySelectorAll('[data-mt]').forEach(x => x.classList.toggle('on', x === b)); });
-  document.querySelectorAll('[data-food]').forEach(b => b.onclick = () => { const f = FOODS[b.dataset.food], fm = $('#mealForm'); fm.name.value = f[0]; fm.kcal.value = f[1]; fm.p.value = f[2]; });
+  document.querySelectorAll('[data-food]').forEach(b => b.onclick = () => { const f = FOODS[b.dataset.food], fm = $('#mealForm'); fm.name.value = f[0]; fm.kcal.value = f[1]; fm.p.value = f[2]; fm.c.value = f[3]; fm.f.value = f[4]; });
   document.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { selG = b.dataset.g; render(); });
   document.querySelectorAll('[data-ex]').forEach(b => b.onclick = () => { $('#exForm').exercise.value = b.dataset.ex; $('#exForm').kg.focus(); });
   $('#mealForm').onsubmit = e => {
-    e.preventDefault(); const f = e.target, k = num(f.kcal.value), p = num(f.p.value) || 0;
+    e.preventDefault(); const f = e.target, k = num(f.kcal.value), p = num(f.p.value) || 0, c = num(f.c.value) || 0, fa = num(f.f.value) || 0;
     if (!isFinite(k) || k < 0) return toast('اكتب السعرات بالأرقام');
-    S.meals.push({ id: uid(), date: day, type: selType, name: f.name.value.trim(), kcal: k, p }); save(); render();
+    if (editId) { const m = S.meals.find(x => x.id === editId); if (m) Object.assign(m, { name: f.name.value.trim(), kcal: k, p, c, f: fa }); editId = null; }
+    else S.meals.push({ id: uid(), date: day, type: selType, name: f.name.value.trim(), kcal: k, p, c, f: fa });
+    save(); render();
   };
+  document.querySelectorAll('[data-editmeal]').forEach(b => b.onclick = () => { editId = b.dataset.editmeal; render(); window.scrollTo(0, 420); });
+  if ($('#cancelEdit')) $('#cancelEdit').onclick = () => { editId = null; render(); };
+  $('#scanBtn').onclick = () => $('#scanFile').click();
+  $('#scanFile').onchange = e => { if (e.target.files[0]) scanMeal(e.target.files[0]); e.target.value = ''; };
+  $('#chatBtn2').onclick = openChat;
   document.querySelectorAll('[data-delmeal]').forEach(b => b.onclick = () => { S.meals = S.meals.filter(m => m.id !== b.dataset.delmeal); save(); render(); });
   $('#exForm').onsubmit = e => {
     e.preventDefault(); const f = e.target, kg = num(f.kg.value), reps = parseInt(f.reps.value, 10);
@@ -371,6 +385,12 @@ function viewMe() {
     <div class="formula">${esc(explain(p, w))}</div>
     <label class="f">تعديل يدوي (سيبه فاضي للحساب التلقائي)</label>
     <form id="ovForm"><div class="row"><input name="k" inputmode="numeric" placeholder="سعرات" value="${p.ovK || ''}"><input name="p" inputmode="numeric" placeholder="بروتين جم" value="${p.ovP || ''}"></div><button class="btn sec">احفظ</button></form></div>
+  <div class="card"><h2>${svg('bolt')} المساعد الذكي (Gemini)</h2>
+    <div class="mut">بيفعّل تصوير الوجبة وشات المساعد. محتاج مفتاح Google AI Studio مجاني بتاعك أنت:<br>1) افتح aistudio.google.com/apikey 2) Create API key 3) انسخه وحطه هنا.</div>
+    <form id="keyForm"><div class="row"><input type="password" name="k" placeholder="${getKey() ? 'المفتاح محفوظ (••••' + esc(getKey().slice(-4)) + ')' : 'الصق المفتاح هنا'}" autocomplete="off"></div>
+    <div class="row"><button class="btn">احفظ المفتاح</button><button class="btn sec" type="button" id="keyTest">جرّب المفتاح</button>${getKey() ? '<button class="btn del" type="button" id="keyDel">امسح</button>' : ''}</div></form>
+    <div id="keyMsg" class="mut"></div>
+    <div class="note">المفتاح بيتخزن على موبايلك بس، مش في الكود ومش في النسخة الاحتياطية. الصور والرسائل بتتبعت لـ Google للتحليل، وفي الحصة المجانية جوجل ممكن تستخدمها لتحسين منتجاتها. التقديرات تقريبية.</div></div>
   <div class="card"><h2>${svg('shield')} نسخة احتياطية</h2>
     <div class="mut">كل بياناتك على موبايلك بس. لو مسحت بيانات المتصفح أو غيرت الموبايل هتضيع، فاعمل نسخة كل فترة واحفظها في Google Drive.</div>
     <div class="row"><button class="btn" id="exp">حمّل نسخة (بيانات + صور)</button></div>
@@ -381,6 +401,9 @@ function viewMe() {
 }
 function bindMe() {
   $('#editP').onclick = () => startOb(true);
+  $('#keyForm').onsubmit = e => { e.preventDefault(); const k = e.target.k.value.trim(); if (!k) return; localStorage.setItem(GK, k); $('#keyMsg').textContent = 'اتحفظ على الموبايل.'; setTimeout(render, 600); };
+  if ($('#keyDel')) $('#keyDel').onclick = () => { localStorage.removeItem(GK); render(); };
+  $('#keyTest').onclick = async () => { $('#keyMsg').textContent = '...'; try { const r = await gemini([{ text: 'Reply with JSON {"ok":true}' }]); $('#keyMsg').textContent = r && r.ok ? '✓ المفتاح شغال.' : 'اتقبل لكن الرد غريب.'; } catch (e) { $('#keyMsg').textContent = aiErr(e); } };
   $('#ovForm').onsubmit = e => { e.preventDefault(); S.profile.ovK = num(e.target.k.value) || 0; S.profile.ovP = num(e.target.p.value) || 0; save(); render(); toast('اتحفظ'); };
   $('#exp').onclick = async () => {
     const photos = await Promise.all((await photoAll()).map(async p => ({ id: p.id, date: p.date, data: await b64(p.blob) })));
@@ -407,8 +430,151 @@ function bindMe() {
   };
   $('#wipe').onclick = async () => {
     if (!confirm('هتمسح كل حاجة. متأكد؟')) return; if (!confirm('آخر تأكيد: مفيش رجوع.')) return;
-    S = defaults(); save(); for (const p of await photoAll()) await photoDel(p.id); location.reload();
+    S = defaults(); save(); localStorage.removeItem(GK); for (const p of await photoAll()) await photoDel(p.id); location.reload();
   };
+}
+
+
+// ---------- AI (user's own Gemini key, stored only on this phone) ----------
+const GK = 'fit.gkey';
+const MODELS = ['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+const getKey = () => localStorage.getItem(GK) || '';
+async function gemini(parts, system, history) {
+  const key = getKey();
+  if (!key) throw new Error('NOKEY');
+  const contents = (history || []).concat([{ role: 'user', parts }]);
+  const body = { contents, generationConfig: { responseMimeType: 'application/json', temperature: 0.2 } };
+  if (system) body.systemInstruction = { parts: [{ text: system }] };
+  let lastErr;
+  for (const m of MODELS) {
+    let r;
+    try { r = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + m + ':generateContent', { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body) }); }
+    catch (e) { throw new Error('NET'); }
+    if (r.status === 404) { lastErr = new Error('MODEL'); continue; }
+    if (r.status === 400 || r.status === 403) { const j = await r.json().catch(() => ({})); throw new Error(/API key|API_KEY|permission/i.test(JSON.stringify(j)) ? 'BADKEY' : 'BAD:' + ((j.error && j.error.message) || r.status)); }
+    if (r.status === 429) throw new Error('QUOTA');
+    if (!r.ok) throw new Error('HTTP' + r.status);
+    const j = await r.json();
+    const txt = ((j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || []).filter(p => !p.thought && p.text).map(p => p.text).join('');
+    if (!txt) throw new Error('EMPTY');
+    const clean = txt.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    try { return JSON.parse(clean); } catch (e) { throw new Error('EMPTY'); }
+  }
+  throw lastErr || new Error('MODEL');
+}
+function aiErr(e) {
+  const m = String(e.message || e);
+  if (m === 'NOKEY') return 'محتاج مفتاح Gemini الأول. حطه من تبويب "أنا" > المساعد الذكي.';
+  if (m === 'BADKEY') return 'المفتاح مش مقبول. اتأكد إنك نسخته كامل من Google AI Studio.';
+  if (m === 'QUOTA') return 'خلصت الحصة المجانية دلوقتي (أو بتبعت بسرعة). استنى شوية وجرب تاني.';
+  if (m === 'NET') return 'مفيش اتصال بالإنترنت أو الخدمة مش مفتوحة من شبكتك.';
+  if (m === 'MODEL') return 'الموديل مش متاح بالمفتاح ده حاليا.';
+  if (m === 'EMPTY') return 'الرد جه غير مفهوم. جرب تاني.';
+  return 'حصلت مشكلة: ' + m.slice(0, 120);
+}
+function imgB64(file) {
+  return new Promise((res, rej) => {
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, 1024 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(u);
+      res(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
+    };
+    img.onerror = () => { URL.revokeObjectURL(u); rej(new Error('img')); };
+    img.src = u;
+  });
+}
+async function scanMeal(file) {
+  const note = $('#scanNote');
+  if (!getKey()) { note.innerHTML = '<div class="note">محتاج مفتاح Gemini الأول: تبويب "أنا" > المساعد الذكي.</div>'; return; }
+  note.innerHTML = '<div class="note">بحلل الصورة...</div>';
+  try {
+    const data = await imgB64(file);
+    const sys = 'You estimate nutrition from a photo of a meal, typical Egyptian portions in mind. Reply ONLY with JSON: {"name":"short Arabic meal name","kcal":number,"p":number,"c":number,"f":number,"items":["Arabic item with rough amount"],"confidence":"low|medium|high"}. p=protein grams, c=carbs grams, f=fat grams. If the image is not food, reply {"error":"not_food"}.';
+    const r = await gemini([{ text: 'قدّر السعرات والماكروز للوجبة في الصورة.' }, { inlineData: { mimeType: 'image/jpeg', data } }], sys);
+    if (r.error || !(num(r.kcal) >= 0)) { note.innerHTML = '<div class="note">مش باين أكل في الصورة. جرب صورة أوضح.</div>'; return; }
+    const fm = $('#mealForm');
+    fm.name.value = r.name || 'وجبة'; fm.kcal.value = Math.round(num(r.kcal)); fm.p.value = Math.round(num(r.p) || 0); fm.c.value = Math.round(num(r.c) || 0); fm.f.value = Math.round(num(r.f) || 0);
+    note.innerHTML = `<div class="note"><b>تقدير تقريبي</b> من الذكاء الاصطناعي (ثقة: ${{ low: 'قليلة', medium: 'متوسطة', high: 'عالية' }[r.confidence] || 'غير معروفة'}). ${(r.items || []).map(esc).join('، ')}<br>راجع الأرقام وعدّلها لو محتاج، وبعدين دوس "أضف الوجبة".</div>`;
+    fm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (e) { note.innerHTML = `<div class="note">${esc(aiErr(e))}</div>`; }
+}
+
+// ---------- chat assistant ----------
+let chatHist = [], chatMsgs = [], chatOpen = false;
+function ctxText() {
+  const T = targets(), ms = S.meals.filter(m => m.date === day), ws = S.workouts.filter(w => w.date === day);
+  return `Today's date: ${today()}. Selected day in the app: ${day}. Daily targets: ${T.kcal} kcal, protein ${T.protein} g, carbs ${T.carbs} g, fat ${T.fat} g. Latest weight: ${curWeight()} kg.
+Meals on the selected day: ${JSON.stringify(ms.map(m => ({ id: m.id, name: m.name, kcal: m.kcal, p: m.p, c: m.c, f: m.f, type: m.type })))}
+Workouts on the selected day: ${JSON.stringify(ws.map(w => ({ id: w.id, exercise: w.exercise, sets: w.sets })))}`;
+}
+const CHAT_SYS = `You are the assistant inside a personal Arabic fitness tracking app. The user writes in Egyptian Arabic. Reply ONLY with JSON: {"reply":"short friendly Egyptian Arabic answer","actions":[...]}.
+Allowed actions (use only what the user clearly asked for; if details are missing, ask in reply and return no actions):
+{"type":"add_meal","name":str,"kcal":num,"p":num,"c":num,"f":num,"meal_type":"فطار|غداء|عشا|سناك","date":"YYYY-MM-DD optional"}  (estimate macros yourself if the user gave only a food; say they are approximate)
+{"type":"add_set","exercise":str,"kg":num,"reps":int,"date":"YYYY-MM-DD optional"}
+{"type":"add_weight","kg":num,"date":"YYYY-MM-DD optional"}
+{"type":"delete_meal","id":"meal id from context"}
+{"type":"delete_workout","id":"workout id from context"}
+Never invent ids. You can answer questions about the day's totals from the context. Keep replies under 3 sentences.`;
+function applyAction(a) {
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(a.date || '') ? a.date : day;
+  if (a.type === 'add_meal') {
+    const m = { id: uid(), date: d, type: MEALT.includes(a.meal_type) ? a.meal_type : selType, name: String(a.name || 'وجبة').slice(0, 80), kcal: Math.max(0, num(a.kcal) || 0), p: num(a.p) || 0, c: num(a.c) || 0, f: num(a.f) || 0 };
+    S.meals.push(m); save();
+    return { text: `أضفت وجبة: ${m.name} (${Math.round(m.kcal)} سعر، ب ${r1(m.p)} ك ${r1(m.c)} د ${r1(m.f)}) - تقريبي`, undo: () => { S.meals = S.meals.filter(x => x.id !== m.id); } };
+  }
+  if (a.type === 'add_set') {
+    const kg = num(a.kg), reps = parseInt(a.reps, 10), name = String(a.exercise || '').trim();
+    if (!name || !isFinite(kg) || !(reps > 0)) return { text: 'ما قدرتش أضيف السيت: بيانات ناقصة' };
+    let w = S.workouts.find(x => x.date === d && x.exercise === name), made = false;
+    if (!w) { w = { id: uid(), date: d, exercise: name, sets: [] }; S.workouts.push(w); made = true; }
+    w.sets.push({ kg, reps }); save();
+    return { text: `أضفت سيت: ${name} ${kg}×${reps}`, undo: () => { w.sets.pop(); if (!w.sets.length) S.workouts = S.workouts.filter(x => x !== w); } };
+  }
+  if (a.type === 'add_weight') {
+    const kg = num(a.kg); if (!(kg > 20 && kg < 400)) return { text: 'وزن غير صحيح' };
+    const old = S.weights.find(w => w.date === d); S.weights = S.weights.filter(w => w.date !== d);
+    const n = { id: uid(), date: d, kg }; S.weights.push(n); save();
+    return { text: `سجلت وزنك ${kg} كجم`, undo: () => { S.weights = S.weights.filter(w => w !== n); if (old) S.weights.push(old); } };
+  }
+  return null;
+}
+function openChat() {
+  chatOpen = true; let el = $('#chat');
+  if (!el) { el = document.createElement('div'); el.id = 'chat'; document.body.appendChild(el); }
+  el.style.display = 'flex'; paintChat();
+}
+function paintChat() {
+  const el = $('#chat'); if (!el) return;
+  el.innerHTML = `<div class="chh"><b>المساعد</b><button id="chX" class="btn sec small" style="margin:0">إغلاق</button></div>
+  <div class="chm" id="chm">${chatMsgs.length ? '' : '<div class="mut" style="text-align:center;margin-top:20px">اكتب زي: "ضيف لي طبق كشري" أو "سجلت بنش 60×10" أو "امسح آخر وجبة".<br>الإضافة بتتنفذ على طول وفيها زرار تراجع. المسح بيطلب تأكيدك.</div>'}
+  ${chatMsgs.map((m, i) => m.k === 'u' ? `<div class="bub u">${esc(m.t)}</div>` : m.k === 'a' ? `<div class="bub a">${esc(m.t)}</div>` : m.k === 'ok' ? `<div class="bub s">${esc(m.t)} ${m.undo ? `<a href="#" data-undo="${i}">تراجع</a>` : ''}</div>` : m.k === 'del' ? `<div class="bub s">${esc(m.t)} ${m.done ? '(اتمسح)' : `<a href="#" data-conf="${i}">تأكيد المسح</a>`}</div>` : `<div class="bub e">${esc(m.t)}</div>`).join('')}</div>
+  <form id="chF" class="chf"><input id="chI" placeholder="اكتب رسالتك..." autocomplete="off"><button class="btn small" style="margin:0">إرسال</button></form>`;
+  $('#chX').onclick = () => { chatOpen = false; el.style.display = 'none'; render(); };
+  $('#chF').onsubmit = sendChat;
+  el.querySelectorAll('[data-undo]').forEach(a => a.onclick = ev => { ev.preventDefault(); const m = chatMsgs[a.dataset.undo]; if (m.undo) { m.undo(); m.undo = null; save(); } paintChat(); });
+  el.querySelectorAll('[data-conf]').forEach(a => a.onclick = ev => { ev.preventDefault(); const m = chatMsgs[a.dataset.conf]; m.run(); m.done = true; save(); paintChat(); });
+  const mm = $('#chm'); mm.scrollTop = mm.scrollHeight;
+}
+async function sendChat(e) {
+  e.preventDefault(); const inp = $('#chI'), t = inp.value.trim(); if (!t) return;
+  chatMsgs.push({ k: 'u', t }); paintChat();
+  if (!getKey()) { chatMsgs.push({ k: 'e', t: aiErr(new Error('NOKEY')) }); return paintChat(); }
+  chatMsgs.push({ k: 'a', t: '...' }); paintChat();
+  try {
+    const hist = chatHist.slice(-8);
+    const r = await gemini([{ text: ctxText() + '\n\nUser: ' + t }], CHAT_SYS, hist);
+    chatMsgs.pop();
+    chatHist.push({ role: 'user', parts: [{ text: t }] }, { role: 'model', parts: [{ text: JSON.stringify(r) }] });
+    if (r.reply) chatMsgs.push({ k: 'a', t: String(r.reply) });
+    for (const a of (Array.isArray(r.actions) ? r.actions.slice(0, 5) : [])) {
+      if (a.type === 'delete_meal') { const m = S.meals.find(x => x.id === a.id); if (m) chatMsgs.push({ k: 'del', t: 'مسح الوجبة: ' + m.name, run: () => { S.meals = S.meals.filter(x => x.id !== m.id); } }); }
+      else if (a.type === 'delete_workout') { const w = S.workouts.find(x => x.id === a.id); if (w) chatMsgs.push({ k: 'del', t: 'مسح التمرين: ' + w.exercise, run: () => { S.workouts = S.workouts.filter(x => x.id !== w.id); } }); }
+      else { const o = applyAction(a); if (o) chatMsgs.push({ k: 'ok', t: o.text, undo: o.undo }); }
+    }
+  } catch (err) { chatMsgs.pop(); chatMsgs.push({ k: 'e', t: aiErr(err) }); }
+  paintChat();
 }
 
 // ---------- shell ----------
@@ -427,6 +593,7 @@ async function render() {
   else if (tab === 'progress') app.innerHTML = viewProgress();
   else { app.innerHTML = viewMe(); bindMe(); }
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  if (!$('#fab')) { const f = document.createElement('button'); f.id = 'fab'; f.innerHTML = svg('chat'); f.onclick = openChat; document.body.appendChild(f); }
   $('#hdrDate').textContent = fmtDate(today());
   $('#hdrSub').textContent = S.profile.name ? 'أهلا يا ' + S.profile.name : 'تابع تمرينك وأكلك';
   window.scrollTo(0, scroll);
