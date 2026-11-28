@@ -1,7 +1,7 @@
 'use strict';
 // ---------- storage (same key as v1 so old data is kept) ----------
 const KEY = 'fit.v1';
-const defaults = () => ({ settings: { kcal: 2650, protein: 130 }, profile: null, meals: [], weights: [], workouts: [] });
+const defaults = () => ({ settings: { kcal: 2650, protein: 130 }, profile: null, meals: [], weights: [], workouts: [], split: { id: 'ppl', idx: 0 } });
 let S;
 try { S = Object.assign(defaults(), JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { S = defaults(); }
 const save = () => localStorage.setItem(KEY, JSON.stringify(S));
@@ -54,6 +54,7 @@ const IC = {
   bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
   shield: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/>'
 };
+IC.home = IC.today; IC.work = IC.dumb;
 IC.chat='<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>';
 const svg = k => `<svg viewBox="0 0 24 24">${IC[k]}</svg>`;
 
@@ -153,7 +154,7 @@ function renderOb() {
     const old = S.profile || {};
     S.profile = { name: ob.name.trim(), sex: ob.sex, age: num(ob.age), height: num(ob.height), weight: num(ob.weight), act: ob.act, level: ob.level, goal: ob.goal, pace: ob.pace, ovK: old.ovK || 0, ovP: old.ovP || 0 };
     if (!S.weights.some(x => x.date === today()) && !(S.weights.length && ob.edit)) S.weights.push({ id: uid(), date: today(), kg: S.profile.weight });
-    save(); ob = null; document.body.classList.remove('onb'); showShell(); tab = 'today'; render(); window.scrollTo(0, 0);
+    save(); ob = null; document.body.classList.remove('onb'); showShell(); tab = 'home'; render(); window.scrollTo(0, 0);
   };
 }
 function grabOb() {
@@ -174,17 +175,37 @@ const EXG = {
   'كتف': ['ضغط كتف دامبل', 'رفرفة جانبي', 'رفرفة خلفي', 'ضغط كتف بار'],
   'دراع': ['باي بار', 'باي دامبل', 'تراي كابل', 'ضغط فرنسي', 'هامر']
 };
+Object.assign(EXG, {
+  'باي': ['باي بار', 'باي دامبل', 'هامر', 'باي كابل'],
+  'تراي': ['تراي كابل', 'ضغط فرنسي', 'ديبس', 'تراي دامبل خلف الراس'],
+  'بطن': ['كرانش', 'رفع رجل', 'بلانك', 'كرانش كابل'],
+  'رجل أمامي': ['سكوات', 'ليج برس', 'ليج إكستنشن', 'لانجز'],
+  'رجل خلفي': ['رومانيان ديدلفت', 'ليج كيرل', 'هيب ثرست', 'سمانة']
+});
+const SPLITS = {
+  ppl: { t: 'Push / Pull / Legs', s: 'دفع، سحب، رجل بالدور', d: [['Push', ['صدر', 'كتف', 'تراي']], ['Pull', ['ضهر', 'باي']], ['Legs', ['رجل', 'بطن']]] },
+  arnold: { t: 'Arnold Split', s: 'صدر وضهر، كتف ودراع، رجل', d: [['صدر وضهر', ['صدر', 'ضهر']], ['كتف ودراع', ['كتف', 'باي', 'تراي']], ['رجل وبطن', ['رجل', 'بطن']]] },
+  ul: { t: 'Upper / Lower', s: 'جسم علوي وسفلي بالتبادل', d: [['Upper علوي', ['صدر', 'ضهر', 'كتف', 'باي', 'تراي']], ['Lower سفلي', ['رجل', 'بطن']]] },
+  fb: { t: 'Full Body', s: 'الجسم كله في كل تمرينة', d: [['Full Body', ['صدر', 'ضهر', 'رجل', 'كتف', 'باي', 'تراي', 'بطن']]] },
+  ap: { t: 'Anterior / Posterior', s: 'الجزء الأمامي والخلفي من الجسم', d: [['Anterior أمامي', ['صدر', 'كتف', 'باي', 'رجل أمامي', 'بطن']], ['Posterior خلفي', ['ضهر', 'تراي', 'رجل خلفي', 'كتف']]] },
+  bro: { t: 'كل عضلة في يوم', s: 'صدر، ضهر، رجل، كتف، دراع', d: [['صدر', ['صدر']], ['ضهر', ['ضهر']], ['رجل', ['رجل']], ['كتف', ['كتف']], ['دراع', ['باي', 'تراي']]] }
+};
+function curSplit() {
+  if (!S.split || !SPLITS[S.split.id]) S.split = { id: 'ppl', idx: 0 };
+  const sp = SPLITS[S.split.id]; S.split.idx = ((S.split.idx | 0) % sp.d.length + sp.d.length) % sp.d.length;
+  return sp;
+}
 let selG = 'صدر', selType = 'غداء';
 
 // ---------- today ----------
-let tab = 'today', day = today(), editId = null;
+let tab = 'home', day = today(), editId = null;
 function ring(frac, over) {
   const R = 70, C = 2 * Math.PI * R, f = Math.max(0, Math.min(1, frac));
   return `<svg viewBox="0 0 170 170"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2dd4a7"/><stop offset="1" stop-color="#38bdf8"/></linearGradient></defs>
   <circle cx="85" cy="85" r="${R}" fill="none" stroke="#0a1124" stroke-width="14"/>
   <circle cx="85" cy="85" r="${R}" fill="none" stroke="${over ? '#f87171' : 'url(#g)'}" stroke-width="14" stroke-linecap="round" stroke-dasharray="${(C * f).toFixed(1)} ${C.toFixed(1)}"/></svg>`;
 }
-function viewToday() {
+function viewToday(part) {
   const T = targets();
   const meals = S.meals.filter(m => m.date === day);
   const kcal = meals.reduce((a, m) => a + m.kcal, 0), prot = meals.reduce((a, m) => a + (m.p || 0), 0), carb = meals.reduce((a, m) => a + (m.c || 0), 0), fat = meals.reduce((a, m) => a + (m.f || 0), 0);
@@ -192,7 +213,9 @@ function viewToday() {
   const wk = S.workouts.filter(w => w.date === day);
   const names = [...new Set(S.workouts.map(w => w.exercise))];
   const left = Math.round(T.kcal - kcal);
-  return `
+  const sp = curSplit(), sd = sp.d[S.split.idx], grps = sd[1];
+  if (!grps.includes(selG)) selG = grps[0];
+  const out = `
   <div class="card"><div class="row" style="margin:0"><button class="btn sec" id="prev" style="width:56px;flex:none;margin:0">›</button>
     <input type="date" id="day" value="${day}"><button class="btn sec" id="next" style="width:56px;flex:none;margin:0">‹</button></div></div>
 
@@ -214,29 +237,48 @@ function viewToday() {
       <button class="btn">${em ? 'احفظ التعديل' : 'أضف الوجبة'}</button>${em ? '<button class="btn sec" type="button" id="cancelEdit">إلغاء</button>' : ''}</form>
     ${meals.map(m => `<div class="item"><span>${m.type ? '<span class="mut">' + esc(m.type) + ' · </span>' : ''}${esc(m.name)}<br><span class="mut">${ar(Math.round(m.kcal))} سعر · ب ${ar(r1(m.p || 0))} · ك ${ar(r1(m.c || 0))} · د ${ar(r1(m.f || 0))} جم</span></span><span style="display:flex;gap:6px"><button class="btn del" style="color:var(--ac2);border-color:#38bdf844" data-editmeal="${m.id}">تعديل</button><button class="btn del" data-delmeal="${m.id}">حذف</button></span></div>`).join('')}
   </div>
-
+<!--SPLIT-->
   <div class="card"><h2>${svg('dumb')} تمرين النهاردة</h2>
-    <div class="chips">${Object.keys(EXG).map(g => `<button data-g="${g}" class="${g === selG ? 'on' : ''}">${g}</button>`).join('')}</div>
+    <label class="f">نظام التمرين</label>
+    <select id="splitSel">${Object.entries(SPLITS).map(([k, v]) => `<option value="${k}" ${k === S.split.id ? 'selected' : ''}>${v.t}</option>`).join('')}</select>
+    <div class="mut" style="margin:4px 0 8px">${sp.s}${sp.d.length > 1 ? ' · ' + ar(sp.d.length) + ' أيام بالدور' : ''}</div>
+    ${sp.d.length > 1 ? `<div class="chips">${sp.d.map((d, i) => `<button data-sd="${i}" class="${i === S.split.idx ? 'on' : ''}">${d[0]}</button>`).join('')}</div>` : ''}
+    ${grps.length > 1 ? `<div class="chips">${grps.map(g => `<button data-g="${g}" class="${g === selG ? 'on' : ''}">${g}</button>`).join('')}</div>` : ''}
     <div class="chips">${EXG[selG].map(n => `<button data-ex="${esc(n)}">${n}</button>`).join('')}</div>
     <form id="exForm"><div class="row"><input name="exercise" list="exnames" placeholder="اسم التمرين" required></div>
       <datalist id="exnames">${names.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       <div class="row"><input name="kg" inputmode="decimal" placeholder="الوزن كجم" required><input name="reps" inputmode="numeric" placeholder="العدات" required></div>
       <button class="btn">أضف سيت</button></form>
+    ${sp.d.length > 1 ? '<button class="btn sec" type="button" id="sdNext">خلصت اليوم ← التمرينة اللي بعدها: ' + esc(sp.d[(S.split.idx + 1) % sp.d.length][0]) + '</button>' : ''}
     ${wk.map(w => {
       const prev = lastBefore(w.exercise, day);
       return `<div class="ex"><b>${esc(w.exercise)}</b>${w.sets.map((s, i) => `<span class="chip">${s.kg}×${s.reps}<a href="#" data-delset="${w.id}:${i}">✕</a></span>`).join('')}
         <div class="mut">${prev ? 'آخر مرة (' + fmtDate(prev.date) + '): ' + prev.sets.map(s => s.kg + '×' + s.reps).join(' ، ') : 'أول مرة'}</div></div>`;
     }).join('') || '<div class="mut" style="margin-top:8px">لسه ما سجلتش تمرين.</div>'}
   </div>`;
+  const k = out.indexOf('<!--SPLIT-->'), dateCard = out.slice(0, out.indexOf('</div></div>') + 12);
+  return part === 'work' ? dateCard + out.slice(k + 12) : out.slice(0, k);
+}
+function viewHome() {
+  const T = targets(), kcal = S.meals.filter(m => m.date === today()).reduce((a, m) => a + m.kcal, 0);
+  const sp = curSplit(), sd = sp.d[S.split.idx], sets = S.workouts.filter(w => w.date === today()).reduce((a, w) => a + w.sets.length, 0);
+  return `<h1 style="margin:6px 0 12px">تعمل إيه النهاردة؟</h1>
+  <a href="#" class="card hero go" data-go="food"><h2>${svg('food')} الأكل</h2><div class="mut">سجل وجباتك وشوف سعراتك والبروتين</div><div class="big" style="font-size:26px">${ar(Math.round(kcal))} <span class="mut" style="font-size:14px">/ ${ar(T.kcal)} سعر</span></div></a>
+  <a href="#" class="card hero go" data-go="work"><h2>${svg('dumb')} التمرين</h2><div class="mut">${sp.t} · الجاي: ${esc(sd[0])}</div><div class="big" style="font-size:26px">${ar(sets)} <span class="mut" style="font-size:14px">سيت النهاردة</span></div></a>
+  <div class="row"><button class="btn sec" data-go="weight">الوزن</button><button class="btn sec" data-go="photos">الصور</button><button class="btn sec" data-go="progress">التقدم</button></div>`;
 }
 function lastBefore(ex, d) { return S.workouts.filter(w => w.exercise === ex && w.date < d).sort((a, b) => b.date.localeCompare(a.date))[0]; }
 function bindToday() {
+  const $ = s => document.querySelector(s) || {};
   $('#day').onchange = e => { day = e.target.value || today(); render(); };
   $('#prev').onclick = () => { day = addDays(day, -1); render(); };
   $('#next').onclick = () => { day = addDays(day, 1); render(); };
   document.querySelectorAll('[data-mt]').forEach(b => b.onclick = () => { selType = b.dataset.mt; document.querySelectorAll('[data-mt]').forEach(x => x.classList.toggle('on', x === b)); });
   document.querySelectorAll('[data-food]').forEach(b => b.onclick = () => { const f = FOODS[b.dataset.food], fm = $('#mealForm'); fm.name.value = f[0]; fm.kcal.value = f[1]; fm.p.value = f[2]; fm.c.value = f[3]; fm.f.value = f[4]; });
   document.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { selG = b.dataset.g; render(); });
+  $('#splitSel').onchange = e => { S.split = { id: e.target.value, idx: 0 }; save(); render(); toast('اتغير النظام'); };
+  document.querySelectorAll('[data-sd]').forEach(b => b.onclick = () => { S.split.idx = +b.dataset.sd; save(); render(); });
+  if ($('#sdNext')) $('#sdNext').onclick = () => { S.split.idx++; curSplit(); save(); render(); };
   document.querySelectorAll('[data-ex]').forEach(b => b.onclick = () => { $('#exForm').exercise.value = b.dataset.ex; $('#exForm').kg.focus(); });
   $('#mealForm').onsubmit = e => {
     e.preventDefault(); const f = e.target, k = num(f.kcal.value), p = num(f.p.value) || 0, c = num(f.c.value) || 0, fa = num(f.f.value) || 0;
@@ -578,7 +620,7 @@ async function sendChat(e) {
 }
 
 // ---------- shell ----------
-const TABS = [['today', 'اليوم'], ['weight', 'الوزن'], ['photos', 'الصور'], ['progress', 'التقدم'], ['me', 'أنا']];
+const TABS = [['home', 'الرئيسية'], ['food', 'الأكل'], ['work', 'التمرين'], ['weight', 'الوزن'], ['progress', 'التقدم'], ['me', 'أنا']];
 function showShell() {
   $('#hdr').style.display = ''; $('#tabs').style.display = '';
   $('#tabs').innerHTML = TABS.map(([k, t]) => `<button data-tab="${k}">${svg(k)}<span>${t}</span></button>`).join('');
@@ -587,7 +629,8 @@ function showShell() {
 async function render() {
   if (!S.profile) { if (!ob) startOb(false); return; }
   const app = $('#app'), scroll = window.scrollY;
-  if (tab === 'today') { app.innerHTML = viewToday(); bindToday(); }
+  if (tab === 'home') { app.innerHTML = viewHome(); document.querySelectorAll('[data-go]').forEach(b => b.onclick = e => { e.preventDefault(); tab = b.dataset.go; window.scrollTo(0, 0); render(); }); }
+  else if (tab === 'food' || tab === 'work') { app.innerHTML = viewToday(tab); bindToday(); }
   else if (tab === 'weight') { app.innerHTML = viewWeight(); bindWeight(); }
   else if (tab === 'photos') { app.innerHTML = await viewPhotos(); bindPhotos(); }
   else if (tab === 'progress') app.innerHTML = viewProgress();
