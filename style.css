@@ -100,3 +100,12 @@ body.onb #fab{display:none}
 .bi svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
 #fab svg{width:26px;height:26px;stroke:#04241c;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 a.go{display:block;color:inherit;text-decoration:none}
+.guide{background:#0f172a;border:1px solid #334155;border-radius:14px;padding:12px;margin:10px 0}
+.guide .gh{display:flex;justify-content:space-between;align-items:center}
+.guide .gx{background:none;border:0;color:inherit;font-size:18px}
+.guide .gimgs{display:flex;gap:6px;margin:8px 0}
+.guide .gimgs img{width:50%;border-radius:10px;background:#1e293b;min-height:80px;object-fit:cover}
+.guide h3{font-size:14px;margin:10px 0 4px}
+.guide ol,.guide ul{margin:0;padding-inline-start:20px;line-height:1.8;font-size:14px}
+.guide .gl{display:flex;gap:8px;margin-top:10px}.guide .gl a{flex:1;text-align:center;text-decoration:none;display:block}
+.exg{background:none;border:0;color:var(--ac2,#38bdf8);font-size:13px;padding:0 6px;text-decoration:underline}
