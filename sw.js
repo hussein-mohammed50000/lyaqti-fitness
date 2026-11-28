@@ -1,4 +1,4 @@
-const CACHE = 'fit-v4';
+const CACHE = 'fit-v5';
 const FILES = ['./', './index.html', './style.css', './app.js', './manifest.webmanifest', './14-icon-192.png', './15-icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => Promise.all(FILES.map(f => c.add(new Request(f, { cache: 'reload' })).catch(() => {})))).then(() => self.skipWaiting()));
